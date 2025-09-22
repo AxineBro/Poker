@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Axine Poker</title>
+  <style>
+    :root {
+      --bg-color: #121212;
+      --accent-color: #00ffcc;
+      --neon-glow: 0 0 10px #00ffcc, 0 0 20px #00ffcc;
+      --card-bg: #1e1e1e;
+      --text-color: #ffffff;
+      --gradient: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+      --table-green: #006400;
+      --wood-border: #8B4513;
+      --gold-accent: #FFD700;
+      --player-bg: rgba(0, 0, 0, 0.7);
+      --inactive-opacity: 0.5;
+    }
+
+    body {
+      background: var(--gradient);
+      color: var(--text-color);
+      font-family: 'Arial', sans-serif;
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .menu-container {
+      background: var(--card-bg);
+      padding: 40px;
+      border-radius: 20px;
+      box-shadow: var(--neon-glow);
+      text-align: center;
+      width: 400px;
+    }
+
+    .menu-section {
+      margin: 20px 0;
+    }
+
+    select, input[type="number"] {
+      background: var(--player-bg);
+      color: var(--text-color);
+      border: none;
+      padding: 10px;
+      border-radius: 8px;
+      width: 100%;
+    }
+
+    button {
+      background: var(--accent-color);
+      color: #000;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: transform 0.2s, background 0.2s;
+    }
+
+    button:hover {
+      background: #00cc99;
+      transform: scale(1.05);
+    }
+
+    .players-list {
+      margin-top: 20px;
+    }
+
+    .player-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--player-bg);
+      padding: 10px;
+      border-radius: 8px;
+      margin: 10px 0;
+    }
+
+    .player-item button {
+      background: #ff4d4d;
+      padding: 5px 10px;
+    }
+
+    .add-bot-buttons {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+    }
+  </style>
+</head>
+<body>
+<div class="menu-container">
+  <h1>Axine Poker</h1>
+
+  <div class="menu-section">
+    <label for="gameType">Тип игры:</label>
+    <select id="gameType">
+      <option value="texas">Техасский Холдем</option>
+      <option value="omaha">Омаха</option>
+    </select>
+  </div>
+
+  <div class="menu-section">
+    <label for="deckType">Тип колоды:</label>
+    <select id="deckType">
+      <option value="standard">Стандартная (52 карты)</option>
+      <option value="shortened">Укороченная (36 карт, 6+)</option>
+    </select>
+  </div>
+
+  <div class="menu-section">
+    <label>Блайнды:</label>
+    <div style="display: flex; gap: 10px;">
+      <input type="number" id="smallBlind" value="10" min="1" placeholder="Малый блайнд">
+      <input type="number" id="bigBlind" value="20" min="2" placeholder="Большой блайнд">
+    </div>
+  </div>
+
+  <div class="menu-section">
+    <h3>Игроки (Вы - human)</h3>
+    <div class="add-bot-buttons">
+      <button onclick="addBot('random')">+ Random Bot</button>
+      <button onclick="addBot('ai')">+ AI Bot</button>
+    </div>
+    <div class="players-list" id="playersList"></div>
+  </div>
+
+  <button id="startBtn">Начать игру</button>
+</div>
+
+<script>
+  let bots = [];
+  let botCounter = { random: 1, ai: 1 };
+
+  function addBot(type) {
+    const name = `${type.charAt(0).toUpperCase() + type.slice(1)} Bot ${botCounter[type]++}`;
+    bots.push({ type, name });
+    updatePlayersList();
+  }
+
+  function removeBot(index) {
+    bots.splice(index, 1);
+    updatePlayersList();
+  }
+
+  function updatePlayersList() {
+    const list = document.getElementById('playersList');
+    list.innerHTML = '';
+    bots.forEach((bot, index) => {
+      const div = document.createElement('div');
+      div.className = 'player-item';
+      div.innerHTML = `
+        <span>${bot.name}</span>
+        <button onclick="removeBot(${index})">-</button>
+      `;
+      list.appendChild(div);
+    });
+  }
+
+  document.getElementById('startBtn').addEventListener('click', () => {
+    const gameType = document.getElementById('gameType').value;
+    const deckType = document.getElementById('deckType').value;
+    const smallBlind = parseInt(document.getElementById('smallBlind').value);
+    const bigBlind = parseInt(document.getElementById('bigBlind').value);
+    const players = [{ type: 'human', name: 'You' }, ...bots];
+
+    fetch('/api/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gameType, deckType, smallBlind, bigBlind, players })
+    }).then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          window.location.href = '/game';
+        } else {
+          alert('Ошибка: ' + data.error);
+        }
+      }).catch(err => alert('Ошибка: ' + err.message));
+  });
+</script>
+</body>
+</html>

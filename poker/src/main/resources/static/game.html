@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Axine Poker - Игра</title>
+  <style>
+    :root {
+      --bg-color: #121212;
+      --accent-color: #00ffcc;
+      --neon-glow: 0 0 10px #00ffcc, 0 0 20px #00ffcc;
+      --card-bg: #1e1e1e;
+      --text-color: #ffffff;
+      --gradient: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+      --table-green: #006400;
+      --wood-border: #8B4513;
+      --gold-accent: #FFD700;
+      --player-bg: rgba(0, 0, 0, 0.7);
+      --inactive-opacity: 0.5;
+    }
+
+    body {
+      background: var(--gradient);
+      color: var(--text-color);
+      font-family: 'Arial', sans-serif;
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .game-container {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .pot {
+      position: absolute;
+      top: 20px;
+      font-size: 1.8em;
+      color: var(--gold-accent);
+      text-shadow: 0 0 5px #000;
+      animation: pulse 1s infinite alternate;
+    }
+
+    @keyframes pulse {
+      from { transform: scale(1); }
+      to { transform: scale(1.05); }
+    }
+
+    .table {
+      background-color: var(--table-green);
+      border: 15px solid var(--wood-border);
+      border-radius: 50px; /* Strongly rounded corners */
+      width: 80vw;
+      max-width: 1200px;
+      height: 50vh;
+      max-height: 500px;
+      position: relative;
+      box-shadow: 0 0 30px rgba(0, 255, 204, 0.7), inset 0 0 20px rgba(0, 0, 0, 0.5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .community-cards {
+      display: flex;
+      gap: 10px;
+    }
+
+    .card {
+      width: 70px;
+      height: 100px;
+      background-size: cover;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+      transition: transform 0.3s ease, opacity 0.5s ease;
+      opacity: 0;
+      transform: translateY(20px) scale(0.9);
+    }
+
+    .card.visible {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+
+    .card:hover {
+      transform: scale(1.1);
+    }
+
+    .players-container {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    .player {
+      position: absolute;
+      background: var(--player-bg);
+      padding: 15px;
+      border-radius: 15px;
+      text-align: center;
+      width: 140px;
+      box-shadow: var(--neon-glow);
+      transition: opacity 0.5s, transform 0.3s;
+      pointer-events: auto;
+    }
+
+    .player.folded {
+      opacity: var(--inactive-opacity);
+    }
+
+    .player.active {
+      box-shadow: 0 0 15px #ffcc00;
+    }
+
+    .player-hand {
+      display: flex;
+      justify-content: center;
+      gap: 5px;
+      margin-top: 10px;
+    }
+
+    .player-combo {
+      font-size: 0.9em;
+      color: var(--accent-color);
+      margin-top: 5px;
+    }
+
+    .your-hand {
+      position: absolute;
+      bottom: 100px; /* Slightly above player icon */
+      display: flex;
+      gap: 10px;
+    }
+
+    .controls {
+      position: absolute;
+      bottom: 20px;
+      display: flex;
+      gap: 15px;
+      align-items: center;
+      background: rgba(0,0,0,0.8);
+      padding: 15px;
+      border-radius: 15px;
+    }
+
+    .controls button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .log {
+      position: absolute;
+      right: 20px;
+      top: 80px;
+      width: 250px;
+      max-height: 300px;
+      overflow-y: auto;
+      background: rgba(0,0,0,0.5);
+      padding: 15px;
+      border-radius: 15px;
+      font-size: 0.9em;
+    }
+
+    .winner-overlay {
+      position: fixed;
+      bottom: 150px;
+      top: auto;
+      background: rgba(0,0,0,0.8);
+      padding: 20px;
+      border-radius: 15px;
+      text-align: center;
+      display: none;
+      z-index: 10;
+      width: 300px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    .winner-overlay button {
+      margin-top: 20px;
+    }
+
+    @media (max-width: 768px) {
+      .table {
+        width: 95vw;
+        height: 40vh;
+      }
+      .card {
+        width: 50px;
+        height: 70px;
+      }
+      .player {
+        width: 100px;
+        padding: 10px;
+        font-size: 0.8em;
+      }
+      .your-hand {
+        bottom: 80px;
+      }
+      .controls {
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="game-container">
+  <div class="pot" id="pot">Банк: 0</div>
+  <div class="table">
+    <div class="community-cards" id="communityCards"></div>
+  </div>
+  <div class="players-container" id="playersContainer"></div>
+  <div class="your-hand" id="yourHand"></div>
+  <div class="controls" id="controls">
+    <button id="foldBtn">Фолд</button>
+    <button id="checkBtn">Чек/Колл</button>
+    <button id="betBtn">Ставка</button>
+    <input type="number" id="betAmount" placeholder="Сумма" min="1">
+    <span id="toCall">К уравниванию: 0</span>
+  </div>
+  <div class="log" id="log"></div>
+  <div class="winner-overlay" id="winnerOverlay">
+    <h2>Раунд завершён!</h2>
+    <p id="winnersText"></p>
+    <div id="showdownDetails"></div>
+    <button onclick="continueGame()">Следующий раунд</button>
+  </div>
+</div>
+
+<script>
+  let prevState = { communityCards: [], players: [], hand: [] };
+  let lastMessage = '';
+  let botDelay = 1000; // Simulated delay for bot actions via polling
+
+  function logMessage(msg) {
+    if (!msg || msg === lastMessage) return;
+    const logEl = document.getElementById('log');
+    const p = document.createElement('p');
+    p.textContent = msg;
+    logEl.appendChild(p);
+    logEl.scrollTop = logEl.scrollHeight;
+    lastMessage = msg;
+  }
+
+  function animatePot() {
+    const potEl = document.getElementById('pot');
+    potEl.classList.add('pulse');
+    setTimeout(() => potEl.classList.remove('pulse'), 500);
+  }
+
+  function renderCommunityCards(cards) {
+    const container = document.getElementById('communityCards');
+    container.innerHTML = '';
+    cards.forEach((card, index) => {
+      const div = document.createElement('div');
+      div.className = 'card';
+      div.style.backgroundImage = `url('/images/cards/${card.rank}${card.suit}.svg')`;
+      container.appendChild(div);
+      setTimeout(() => div.classList.add('visible'), index * 200); // Staggered animation
+    });
+  }
+
+  function renderPlayers(playersData, yourTurn, roundEnded, winners) {
+    const container = document.getElementById('playersContainer');
+    container.innerHTML = '';
+    const humanIndex = playersData.findIndex(p => p.name === 'You');
+    const numPlayers = playersData.length;
+    const angleStep = 360 / (numPlayers - 1); // Exclude human
+    let botIndex = 0;
+
+    playersData.forEach((p, i) => {
+      if (p.name === 'You') {
+        // Human at bottom
+        const div = document.createElement('div');
+        div.className = 'player';
+        if (p.folded) div.classList.add('folded');
+        if (yourTurn) div.classList.add('active');
+        div.style.left = '50%';
+        div.style.bottom = '-50px';
+        div.style.transform = 'translateX(-50%)';
+        div.innerHTML = `
+          <strong>${p.name}</strong><br>
+          Фишки: ${p.chips}
+        `;
+        container.appendChild(div);
+      } else {
+        // Bots around the table, outside
+        const angle = -90 + botIndex * angleStep; // Start from left, avoid top
+        const radiusX = 500;
+        const radiusY = 300;
+        const div = document.createElement('div');
+        div.className = 'player';
+        if (p.folded) div.classList.add('folded');
+        div.style.left = `calc(50% + ${radiusX * Math.cos((angle * Math.PI) / 180)}px)`;
+        div.style.top = `calc(50% + ${radiusY * Math.sin((angle * Math.PI) / 180)}px)`;
+        div.style.transform = 'translate(-50%, -50%)';
+        div.innerHTML = `
+          <strong>${p.name}</strong><br>
+          Фишки: ${p.chips}<br>
+          Ставка: ${p.bet || 0}
+        `;
+        if (roundEnded && p.hand) {
+          const handDiv = document.createElement('div');
+          handDiv.className = 'player-hand';
+          p.hand.forEach(card => {
+            const cardDiv = document.createElement('div');
+            cardDiv.className = 'card';
+            cardDiv.style.backgroundImage = `url('/images/cards/${card.rank}${card.suit}.svg')`;
+            cardDiv.style.width = '40px';
+            cardDiv.style.height = '60px';
+            handDiv.appendChild(cardDiv);
+          });
+          div.appendChild(handDiv);
+          if (p.combo && winners.includes(p.name)) {
+            const comboP = document.createElement('p');
+            comboP.className = 'player-combo';
+            comboP.textContent = p.combo;
+            div.appendChild(comboP);
+          }
+        }
+        container.appendChild(div);
+        botIndex++;
+      }
+    });
+  }
+
+  function renderYourHand(hand) {
+    const container = document.getElementById('yourHand');
+    container.innerHTML = '';
+    hand.forEach((card, index) => {
+      const div = document.createElement('div');
+      div.className = 'card';
+      div.style.backgroundImage = `url('/images/cards/${card.rank}${card.suit}.svg')`;
+      container.appendChild(div);
+      setTimeout(() => div.classList.add('visible'), index * 200);
+    });
+  }
+
+  function updateGame() {
+    fetch('/api/state')
+      .then(res => res.json())
+      .then(data => {
+        if (!data.success) {
+          logMessage('Ошибка: ' + data.error);
+          return;
+        }
+
+        document.getElementById('pot').textContent = 'Банк: ' + data.pot;
+        animatePot();
+
+        // Render only if changed to avoid flicker
+        if (JSON.stringify(data.communityCards) !== JSON.stringify(prevState.communityCards)) {
+          renderCommunityCards(data.communityCards);
+          prevState.communityCards = data.communityCards;
+        }
+
+        if (JSON.stringify(data.players) !== JSON.stringify(prevState.players) || data.yourTurn !== prevState.yourTurn || data.roundEnded !== prevState.roundEnded) {
+          renderPlayers(data.players, data.yourTurn, data.roundEnded, data.winners);
+          prevState.players = data.players;
+          prevState.yourTurn = data.yourTurn;
+          prevState.roundEnded = data.roundEnded;
+        }
+
+        if (JSON.stringify(data.hand) !== JSON.stringify(prevState.hand)) {
+          renderYourHand(data.hand);
+          prevState.hand = data.hand;
+        }
+
+        logMessage(data.message);
+
+        document.getElementById('toCall').textContent = 'К уравниванию: ' + data.toCall;
+
+        const controls = document.getElementById('controls');
+        const buttons = controls.querySelectorAll('button');
+        if (data.yourTurn) {
+          buttons.forEach(btn => btn.disabled = false);
+        } else {
+          buttons.forEach(btn => btn.disabled = true);
+        }
+
+        if (data.roundEnded) {
+          const overlay = document.getElementById('winnerOverlay');
+          const winnersText = document.getElementById('winnersText');
+          const showdownDetails = document.getElementById('showdownDetails');
+          winnersText.textContent = data.winners.length > 0 ? 'Победители: ' + data.winners.join(', ') : 'Нет победителей';
+          showdownDetails.innerHTML = '';
+          data.players.forEach(p => {
+            if (p.combo && !p.folded && data.winners.includes(p.name)) {
+              const detail = document.createElement('p');
+              detail.textContent = `${p.name}: ${p.combo}`;
+              showdownDetails.appendChild(detail);
+            }
+          });
+          overlay.style.display = 'block';
+        } else {
+          document.getElementById('winnerOverlay').style.display = 'none';
+          setTimeout(updateGame, 500); // Poll frequently for smooth bot actions
+        }
+      })
+      .catch(err => logMessage('Ошибка: ' + err.message));
+  }
+
+  function performAction(action, amount = 0) {
+    fetch('/api/action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, amount })
+    }).then(res => res.json())
+      .then(data => {
+        if (!data.success) {
+          logMessage('Ошибка: ' + data.error);
+        }
+        updateGame();
+      });
+  }
+
+  function continueGame() {
+    fetch('/api/continue', { method: 'POST' })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          document.getElementById('winnerOverlay').style.display = 'none';
+          prevState = { communityCards: [], players: [], hand: [] }; // Reset to force re-render
+          lastMessage = '';
+          updateGame();
+        } else {
+          logMessage('Ошибка: ' + data.error);
+        }
+      });
+  }
+
+  document.getElementById('foldBtn').addEventListener('click', () => performAction('FOLD'));
+  document.getElementById('checkBtn').addEventListener('click', () => performAction('CHECK'));
+  document.getElementById('betBtn').addEventListener('click', () => {
+    const amount = parseInt(document.getElementById('betAmount').value);
+    if (amount > 0) {
+      performAction('BET', amount);
+      document.getElementById('betAmount').value = '';
+    } else {
+      alert('Сумма должна быть больше 0');
+    }
+  });
+
+  updateGame();
+</script>
+</body>
+</html>
