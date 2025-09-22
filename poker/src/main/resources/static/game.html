@@ -51,6 +51,15 @@
       animation: pulse 1s infinite alternate;
     }
 
+    #yourBalance {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      font-size: 1.2em;
+      color: var(--gold-accent);
+      text-shadow: 0 0 5px #000;
+    }
+
     @keyframes pulse {
       from { transform: scale(1); }
       to { transform: scale(1.05); }
@@ -59,7 +68,7 @@
     .table {
       background-color: var(--table-green);
       border: 15px solid var(--wood-border);
-      border-radius: 50px; /* Strongly rounded corners */
+      border-radius: 50px;
       width: 80vw;
       max-width: 1200px;
       height: 50vh;
@@ -138,7 +147,7 @@
 
     .your-hand {
       position: absolute;
-      bottom: 100px; /* Slightly above player icon */
+      bottom: 100px;
       display: flex;
       gap: 10px;
     }
@@ -218,6 +227,7 @@
 <body>
 <div class="game-container">
   <div class="pot" id="pot">Банк: 0</div>
+  <div id="yourBalance">Баланс: 0</div>
   <div class="table">
     <div class="community-cards" id="communityCards"></div>
   </div>
@@ -242,7 +252,6 @@
 <script>
   let prevState = { communityCards: [], players: [], hand: [] };
   let lastMessage = '';
-  let botDelay = 1000; // Simulated delay for bot actions via polling
 
   function logMessage(msg) {
     if (!msg || msg === lastMessage) return;
@@ -268,21 +277,19 @@
       div.className = 'card';
       div.style.backgroundImage = `url('/images/cards/${card.rank}${card.suit}.svg')`;
       container.appendChild(div);
-      setTimeout(() => div.classList.add('visible'), index * 200); // Staggered animation
+      setTimeout(() => div.classList.add('visible'), index * 200);
     });
   }
 
   function renderPlayers(playersData, yourTurn, roundEnded, winners) {
     const container = document.getElementById('playersContainer');
     container.innerHTML = '';
-    const humanIndex = playersData.findIndex(p => p.name === 'You');
     const numPlayers = playersData.length;
-    const angleStep = 360 / (numPlayers - 1); // Exclude human
+    const angleStep = 360 / (numPlayers - 1);
     let botIndex = 0;
 
-    playersData.forEach((p, i) => {
+    playersData.forEach((p) => {
       if (p.name === 'You') {
-        // Human at bottom
         const div = document.createElement('div');
         div.className = 'player';
         if (p.folded) div.classList.add('folded');
@@ -290,14 +297,10 @@
         div.style.left = '50%';
         div.style.bottom = '-50px';
         div.style.transform = 'translateX(-50%)';
-        div.innerHTML = `
-          <strong>${p.name}</strong><br>
-          Фишки: ${p.chips}
-        `;
+        div.innerHTML = `<strong>${p.name}</strong><br>Фишки: ${p.chips}`;
         container.appendChild(div);
       } else {
-        // Bots around the table, outside
-        const angle = -90 + botIndex * angleStep; // Start from left, avoid top
+        const angle = -90 + botIndex * angleStep;
         const radiusX = 500;
         const radiusY = 300;
         const div = document.createElement('div');
@@ -306,14 +309,12 @@
         div.style.left = `calc(50% + ${radiusX * Math.cos((angle * Math.PI) / 180)}px)`;
         div.style.top = `calc(50% + ${radiusY * Math.sin((angle * Math.PI) / 180)}px)`;
         div.style.transform = 'translate(-50%, -50%)';
-        div.innerHTML = `
-          <strong>${p.name}</strong><br>
-          Фишки: ${p.chips}<br>
-          Ставка: ${p.bet || 0}
-        `;
+        div.innerHTML = `<strong>${p.name}</strong><br>Фишки: ${p.chips}<br>Ставка: ${p.bet || 0}`;
+
+        const handDiv = document.createElement('div');
+        handDiv.className = 'player-hand';
         if (roundEnded && p.hand) {
-          const handDiv = document.createElement('div');
-          handDiv.className = 'player-hand';
+          // открытые карты в конце игры
           p.hand.forEach(card => {
             const cardDiv = document.createElement('div');
             cardDiv.className = 'card';
@@ -322,14 +323,24 @@
             cardDiv.style.height = '60px';
             handDiv.appendChild(cardDiv);
           });
-          div.appendChild(handDiv);
-          if (p.combo && winners.includes(p.name)) {
+          if (p.combo) {
             const comboP = document.createElement('p');
             comboP.className = 'player-combo';
             comboP.textContent = p.combo;
             div.appendChild(comboP);
           }
+        } else {
+          // рубашка пока игра идёт
+          for (let i = 0; i < 2; i++) {
+            const backCard = document.createElement('div');
+            backCard.className = 'card visible';
+            backCard.style.backgroundImage = `url('/images/cards/back.svg')`;
+            backCard.style.width = '40px';
+            backCard.style.height = '60px';
+            handDiv.appendChild(backCard);
+          }
         }
+        div.appendChild(handDiv);
         container.appendChild(div);
         botIndex++;
       }
@@ -358,15 +369,16 @@
         }
 
         document.getElementById('pot').textContent = 'Банк: ' + data.pot;
+        document.getElementById('yourBalance').textContent = 'Баланс: ' + data.yourChips;
         animatePot();
 
-        // Render only if changed to avoid flicker
         if (JSON.stringify(data.communityCards) !== JSON.stringify(prevState.communityCards)) {
           renderCommunityCards(data.communityCards);
           prevState.communityCards = data.communityCards;
         }
 
-        if (JSON.stringify(data.players) !== JSON.stringify(prevState.players) || data.yourTurn !== prevState.yourTurn || data.roundEnded !== prevState.roundEnded) {
+        if (JSON.stringify(data.players) !== JSON.stringify(prevState.players) ||
+            data.yourTurn !== prevState.yourTurn || data.roundEnded !== prevState.roundEnded) {
           renderPlayers(data.players, data.yourTurn, data.roundEnded, data.winners);
           prevState.players = data.players;
           prevState.yourTurn = data.yourTurn;
@@ -379,25 +391,21 @@
         }
 
         logMessage(data.message);
-
         document.getElementById('toCall').textContent = 'К уравниванию: ' + data.toCall;
 
         const controls = document.getElementById('controls');
         const buttons = controls.querySelectorAll('button');
-        if (data.yourTurn) {
-          buttons.forEach(btn => btn.disabled = false);
-        } else {
-          buttons.forEach(btn => btn.disabled = true);
-        }
+        buttons.forEach(btn => btn.disabled = !data.yourTurn);
 
         if (data.roundEnded) {
           const overlay = document.getElementById('winnerOverlay');
           const winnersText = document.getElementById('winnersText');
           const showdownDetails = document.getElementById('showdownDetails');
-          winnersText.textContent = data.winners.length > 0 ? 'Победители: ' + data.winners.join(', ') : 'Нет победителей';
+          winnersText.textContent = data.winners.length > 0 ?
+            'Победители: ' + data.winners.join(', ') : 'Нет победителей';
           showdownDetails.innerHTML = '';
           data.players.forEach(p => {
-            if (p.combo && !p.folded && data.winners.includes(p.name)) {
+            if (p.combo && !p.folded) {
               const detail = document.createElement('p');
               detail.textContent = `${p.name}: ${p.combo}`;
               showdownDetails.appendChild(detail);
@@ -406,7 +414,7 @@
           overlay.style.display = 'block';
         } else {
           document.getElementById('winnerOverlay').style.display = 'none';
-          setTimeout(updateGame, 500); // Poll frequently for smooth bot actions
+          setTimeout(updateGame, 500);
         }
       })
       .catch(err => logMessage('Ошибка: ' + err.message));
@@ -418,12 +426,7 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action, amount })
     }).then(res => res.json())
-      .then(data => {
-        if (!data.success) {
-          logMessage('Ошибка: ' + data.error);
-        }
-        updateGame();
-      });
+      .then(() => updateGame());
   }
 
   function continueGame() {
@@ -432,7 +435,7 @@
       .then(data => {
         if (data.success) {
           document.getElementById('winnerOverlay').style.display = 'none';
-          prevState = { communityCards: [], players: [], hand: [] }; // Reset to force re-render
+          prevState = { communityCards: [], players: [], hand: [] };
           lastMessage = '';
           updateGame();
         } else {

@@ -1,7 +1,6 @@
 package com.axine.pokercasino.model.game;
 
 import com.axine.pokercasino.model.deck.Card;
-import com.axine.pokercasino.model.deck.card.Rank;
 import com.axine.pokercasino.model.deck.card.Suit;
 
 import java.util.*;
@@ -9,248 +8,189 @@ import java.util.stream.Collectors;
 
 public class EvaluationCombination {
 
+    /** Главный метод: возвращает силу руки (чем больше, тем сильнее) */
     public static int getHandPower(List<Card> cards) {
-        if (cards == null || cards.isEmpty()) {
-            throw new IllegalArgumentException("Card list cannot be null or empty");
+        if (cards == null || cards.size() < 5) {
+            throw new IllegalArgumentException("Нужно минимум 5 карт для оценки");
         }
 
-        Map<Suit, List<Card>> suitGroups = groupBySuit(cards);
-        Map<Integer, Integer> rankCounts = groupByRank(cards);
-        List<Integer> sortedRanks = rankCounts.keySet().stream().sorted(Comparator.reverseOrder()).collect(Collectors.toList());
-
-        if (hasRoyalFlush(suitGroups)) {
-            return 9000000;
-        } else if (hasStraightFlush(suitGroups)) {
-            return 8000000 + getStraightHigh(suitGroups);
-        } else if (hasQuads(rankCounts)) {
-            int quadRank = rankCounts.entrySet().stream()
-                    .filter(e -> e.getValue() >= 4)
-                    .map(Map.Entry::getKey)
-                    .findFirst().orElse(0);
-            return 7000000 + quadRank * 1000 + getKicker(cards, quadRank);
-        } else if (hasFullHouse(rankCounts)) {
-            int threeRank = rankCounts.entrySet().stream()
-                    .filter(e -> e.getValue() >= 3)
-                    .map(Map.Entry::getKey)
-                    .max(Integer::compare).orElse(0);
-            int pairRank = rankCounts.entrySet().stream()
-                    .filter(e -> e.getValue() >= 2 && e.getKey() != threeRank)
-                    .map(Map.Entry::getKey)
-                    .max(Integer::compare).orElse(0);
-            return 6000000 + threeRank * 1000 + pairRank * 100;
-        } else if (hasFlush(suitGroups)) {
-            return 5000000 + getHighCard(cards);
-        } else if (hasStraight(sortedRanks)) {
-            return 4000000 + getStraightHighValue(sortedRanks);
-        } else if (hasThreeOfAKind(rankCounts)) {
-            int threeRank = rankCounts.entrySet().stream()
-                    .filter(e -> e.getValue() == 3)
-                    .map(Map.Entry::getKey)
-                    .max(Integer::compare).orElse(0);
-            return 3000000 + threeRank * 1000 + getKicker(cards, threeRank);
-        } else if (hasTwoPairs(rankCounts)) {
-            List<Integer> pairs = rankCounts.entrySet().stream()
-                    .filter(e -> e.getValue() == 2)
-                    .map(Map.Entry::getKey)
-                    .sorted(Comparator.reverseOrder())
-                    .collect(Collectors.toList());
-            return 2000000 + pairs.get(0) * 1000 + pairs.get(1) * 100 + getKicker(cards, pairs.get(0), pairs.get(1));
-        } else if (hasOnePair(rankCounts)) {
-            int pairRank = rankCounts.entrySet().stream()
-                    .filter(e -> e.getValue() == 2)
-                    .map(Map.Entry::getKey)
-                    .max(Integer::compare).orElse(0);
-            return 1000000 + pairRank * 1000 + getKicker(cards, pairRank);
-        } else {
-            return getHighCard(cards);
+        List<List<Card>> allCombos = generateCombinations(cards, 5);
+        int best = 0;
+        for (List<Card> combo : allCombos) {
+            best = Math.max(best, evaluateFiveCards(combo));
         }
+        return best;
     }
 
+    /** Вернёт комбинацию по числовой силе */
     public static Combination getCombinationFromPower(int power) {
-        int type = power / 1000000;
-        if (type < 0 || type >= Combination.values().length) return Combination.HIGHCARD;
-        return Combination.values()[type];
+        int type = power / 1_000_000;
+        return switch (type) {
+            case 9 -> Combination.ROYALFLUSH;
+            case 8 -> Combination.STRAIGHTFLUSH;
+            case 7 -> Combination.QUADS;
+            case 6 -> Combination.FULLHOUSE;
+            case 5 -> Combination.FLUSH;
+            case 4 -> Combination.STRAIGHT;
+            case 3 -> Combination.SET;
+            case 2 -> Combination.TWOPAIRS;
+            case 1 -> Combination.ONEPAIR;
+            default -> Combination.HIGHCARD;
+        };
     }
 
-    private static Map<Suit, List<Card>> groupBySuit(List<Card> cards) {
-        Map<Suit, List<Card>> map = new HashMap<>();
-        for (Card c : cards) {
-            map.computeIfAbsent(c.getSuit(), k -> new ArrayList<>()).add(c);
-        }
-        return map;
-    }
-
-    private static Map<Integer, Integer> groupByRank(List<Card> cards) {
-        Map<Integer, Integer> map = new HashMap<>();
-        for (Card c : cards) {
-            map.merge(c.getRank().getValue(), 1, Integer::sum);
-        }
-        return map;
-    }
-
-    private static boolean hasRoyalFlush(Map<Suit, List<Card>> suitGroups) {
-        for (List<Card> suitCards : suitGroups.values()) {
-            if (suitCards.size() < 5) continue;
-
-            suitCards.sort(Comparator.comparingInt((Card c) -> -c.getRank().getValue()));
-            if (suitCards.get(0).getRank().getValue() == 14 &&
-                    suitCards.get(1).getRank().getValue() == 13 &&
-                    suitCards.get(2).getRank().getValue() == 12 &&
-                    suitCards.get(3).getRank().getValue() == 11 &&
-                    suitCards.get(4).getRank().getValue() == 10) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static boolean hasStraightFlush(Map<Suit, List<Card>> suitGroups) {
-        for (List<Card> suitCards : suitGroups.values()) {
-            if (suitCards.size() < 5) continue;
-
-            List<Integer> ranks = suitCards.stream()
-                    .mapToInt(c -> c.getRank().getValue())
-                    .distinct()
-                    .boxed()
-                    .sorted()
-                    .collect(Collectors.toList());
-
-            if (hasConsecutiveStraight(ranks)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static boolean hasQuads(Map<Integer, Integer> rankCounts) {
-        return rankCounts.values().stream().anyMatch(count -> count >= 4);
-    }
-
-    private static boolean hasFullHouse(Map<Integer, Integer> rankCounts) {
-        boolean hasThree = false;
-        boolean hasPair = false;
-        for (int count : rankCounts.values()) {
-            if (count >= 3) {
-                if (hasThree) {
-                    return true;
-                }
-                hasThree = true;
-            } else if (count >= 2) {
-                if (hasPair) {
-                } else {
-                    hasPair = true;
-                }
-            }
-        }
-        return hasThree && hasPair;
-    }
-
-    private static boolean hasFlush(Map<Suit, List<Card>> suitGroups) {
-        return suitGroups.values().stream().anyMatch(list -> list.size() >= 5);
-    }
-
-    private static boolean hasStraight(List<Integer> sortedUniqueRanks) {
-        return hasConsecutiveStraight(sortedUniqueRanks);
-    }
-
-    private static boolean hasThreeOfAKind(Map<Integer, Integer> rankCounts) {
-        return rankCounts.values().stream().anyMatch(count -> count == 3);
-    }
-
-    private static boolean hasTwoPairs(Map<Integer, Integer> rankCounts) {
-        long pairCount = rankCounts.values().stream().filter(count -> count == 2).count();
-        return pairCount >= 2;
-    }
-
-    private static boolean hasOnePair(Map<Integer, Integer> rankCounts) {
-        long pairCount = rankCounts.values().stream().filter(count -> count == 2).count();
-        return pairCount == 1;
-    }
-
-    private static boolean hasConsecutiveStraight(List<Integer> sortedUniqueRanks) {
-        if (sortedUniqueRanks.size() < 5) return false;
-
-        int consecutive = 1;
-        for (int i = 1; i < sortedUniqueRanks.size(); i++) {
-            if (sortedUniqueRanks.get(i) - sortedUniqueRanks.get(i - 1) == 1) {
-                consecutive++;
-                if (consecutive >= 5) return true;
-            } else {
-                consecutive = 1;
-            }
-        }
-
-        Set<Integer> rankSet = new HashSet<>(sortedUniqueRanks);
-        if (rankSet.contains(14) && rankSet.contains(2) && rankSet.contains(3) &&
-                rankSet.contains(4) && rankSet.contains(5)) {
-            return true;
-        }
-
-        return false;
-    }
-
-    private static int getHighCard(List<Card> cards) {
-        List<Integer> ranks = cards.stream()
-                .mapToInt(c -> c.getRank().getValue())
-                .boxed()
+    /** Оценка строго 5 карт */
+    private static int evaluateFiveCards(List<Card> cards) {
+        cards.sort(Comparator.comparingInt(c -> -c.getRank().getValue()));
+        Map<Integer, Long> rankCounts = cards.stream()
+                .collect(Collectors.groupingBy(c -> c.getRank().getValue(), Collectors.counting()));
+        List<Integer> ranksDesc = cards.stream()
+                .map(c -> c.getRank().getValue())
                 .sorted(Comparator.reverseOrder())
-                .collect(Collectors.toList());
-        int power = 0;
-        for (int i = 0; i < Math.min(ranks.size(), 5); i++) {
-            power += ranks.get(i) * Math.pow(10, 4 - i * 2);
-        }
-        return power;
-    }
+                .toList();
 
-    private static int getStraightHigh(Map<Suit, List<Card>> suitGroups) {
-        for (List<Card> suitCards : suitGroups.values()) {
-            if (suitCards.size() < 5) continue;
-            List<Integer> ranks = suitCards.stream()
-                    .mapToInt(c -> c.getRank().getValue())
-                    .distinct()
-                    .boxed()
+        boolean flush = isFlush(cards);
+        boolean straight = isStraight(cards);
+        int straightHigh = straight ? getStraightHigh(cards) : 0;
+
+        if (flush && straight) {
+            if (straightHigh == 14) return 9_000_000; // Royal
+            return 8_000_000 + straightHigh;
+        }
+
+        if (rankCounts.containsValue(4L)) {
+            int quad = getKeyByValue(rankCounts, 4L);
+            int kicker = ranksDesc.stream().filter(r -> r != quad).findFirst().orElse(0);
+            return 7_000_000 + quad * 100 + kicker;
+        }
+
+        if (rankCounts.containsValue(3L) && rankCounts.size() >= 2) {
+            int trips = getHighestKey(rankCounts, 3L);
+            int pair = getHighestKey(rankCounts, 2L);
+            if (pair > 0) return 6_000_000 + trips * 100 + pair;
+        }
+
+        if (flush) {
+            return 5_000_000 + encodeKickers(ranksDesc);
+        }
+
+        if (straight) {
+            return 4_000_000 + straightHigh;
+        }
+
+        if (rankCounts.containsValue(3L)) {
+            int trips = getHighestKey(rankCounts, 3L);
+            List<Integer> kickers = ranksDesc.stream().filter(r -> r != trips).toList();
+            return 3_000_000 + trips * 100 + encodeKickers(kickers);
+        }
+
+        if (rankCounts.values().stream().filter(v -> v == 2L).count() >= 2) {
+            List<Integer> pairs = rankCounts.entrySet().stream()
+                    .filter(e -> e.getValue() == 2L)
+                    .map(Map.Entry::getKey)
                     .sorted(Comparator.reverseOrder())
-                    .collect(Collectors.toList());
-            if (hasConsecutiveStraight(ranks)) {
-                return ranks.get(0);
-            }
-            if (new HashSet<>(ranks).containsAll(List.of(14, 2, 3, 4, 5))) {
-                return 5; // Wheel
-            }
+                    .toList();
+            int kicker = ranksDesc.stream().filter(r -> !pairs.contains(r)).findFirst().orElse(0);
+            return 2_000_000 + pairs.get(0) * 100 + pairs.get(1) + kicker;
         }
-        return 0;
+
+        if (rankCounts.containsValue(2L)) {
+            int pair = getHighestKey(rankCounts, 2L);
+            List<Integer> kickers = ranksDesc.stream().filter(r -> r != pair).toList();
+            return 1_000_000 + pair * 100 + encodeKickers(kickers);
+        }
+
+        return encodeKickers(ranksDesc); // High card
     }
 
-    private static int getStraightHighValue(List<Integer> sortedRanks) {
+    // ================== ВСПОМОГАТЕЛЬНЫЕ ==================
+
+    private static boolean isFlush(List<Card> cards) {
+        Suit s = cards.get(0).getSuit();
+        return cards.stream().allMatch(c -> c.getSuit() == s);
+    }
+
+    private static boolean isStraight(List<Card> cards) {
+        List<Integer> values = cards.stream()
+                .map(c -> c.getRank().getValue())
+                .distinct()
+                .sorted()
+                .toList();
+
+        // wheel (A-2-3-4-5)
+        if (values.containsAll(List.of(2, 3, 4, 5, 14))) return true;
+
         int consecutive = 1;
-        int high = sortedRanks.get(0);
-        for (int i = 1; i < sortedRanks.size(); i++) {
-            if (sortedRanks.get(i) - sortedRanks.get(i - 1) == 1) {
+        for (int i = 1; i < values.size(); i++) {
+            if (values.get(i) == values.get(i - 1) + 1) {
                 consecutive++;
-                if (consecutive >= 5) {
-                    high = sortedRanks.get(i - 4);
-                }
+                if (consecutive == 5) return true;
             } else {
                 consecutive = 1;
             }
         }
-        if (new HashSet<>(sortedRanks).containsAll(List.of(14, 2, 3, 4, 5))) {
-            return 5; // Wheel
+        return false;
+    }
+
+    private static int getStraightHigh(List<Card> cards) {
+        List<Integer> values = cards.stream()
+                .map(c -> c.getRank().getValue())
+                .distinct()
+                .sorted()
+                .toList();
+        if (values.containsAll(List.of(2, 3, 4, 5, 14))) return 5; // wheel
+        int consecutive = 1, high = values.get(0);
+        for (int i = 1; i < values.size(); i++) {
+            if (values.get(i) == values.get(i - 1) + 1) {
+                consecutive++;
+                high = values.get(i);
+            } else {
+                consecutive = 1;
+            }
         }
         return high;
     }
 
-    private static int getKicker(List<Card> cards, Integer... excludeRanks) {
-        List<Integer> ranks = cards.stream()
-                .mapToInt(c -> c.getRank().getValue())
-                .filter(r -> !Arrays.asList(excludeRanks).contains(r))
-                .boxed()
-                .sorted(Comparator.reverseOrder())
-                .collect(Collectors.toList());
+    private static int getKeyByValue(Map<Integer, Long> map, long value) {
+        return map.entrySet().stream()
+                .filter(e -> e.getValue() == value)
+                .map(Map.Entry::getKey)
+                .findFirst().orElse(0);
+    }
+
+    private static int getHighestKey(Map<Integer, Long> map, long value) {
+        return map.entrySet().stream()
+                .filter(e -> e.getValue() == value)
+                .map(Map.Entry::getKey)
+                .max(Integer::compare).orElse(0);
+    }
+
+    private static int encodeKickers(List<Integer> kickers) {
         int power = 0;
-        for (int i = 0; i < Math.min(ranks.size(), 3); i++) {
-            power += ranks.get(i) * Math.pow(10, 2 - i * 2);
+        int factor = 1;
+        for (int i = 0; i < Math.min(5, kickers.size()); i++) {
+            power += kickers.get(i) * factor;
+            factor *= 15; // база чуть больше максимального ранга
         }
         return power;
+    }
+
+    private static List<List<Card>> generateCombinations(List<Card> cards, int k) {
+        List<List<Card>> result = new ArrayList<>();
+        generateHelper(cards, k, 0, new ArrayList<>(), result);
+        return result;
+    }
+
+    private static void generateHelper(List<Card> cards, int k, int start,
+                                       List<Card> current, List<List<Card>> result) {
+        if (current.size() == k) {
+            result.add(new ArrayList<>(current));
+            return;
+        }
+        for (int i = start; i < cards.size(); i++) {
+            current.add(cards.get(i));
+            generateHelper(cards, k, i + 1, current, result);
+            current.remove(current.size() - 1);
+        }
     }
 }

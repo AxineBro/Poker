@@ -64,49 +64,126 @@ public class GameController {
             if (!gameService.isGameStarted()) {
                 return ResponseEntity.badRequest().body(Map.of("success", false, "error", "Игра не начата"));
             }
+
+            // Продвигаем игру (как у тебя было)
             gameService.advanceGame(null);
+
             Map<String, Object> state = new HashMap<>();
             state.put("pot", gameService.getPot());
-            state.put("communityCards", gameService.getCommunityCards() != null ?
-                    gameService.getCommunityCards().stream()
-                            .map(c -> Map.of("suit", c.getSuit().getShortName(), "rank", c.getRank().getShortName()))
-                            .toList() : List.of());
-            List<Map<String, Object>> playersList = gameService.getPlayers() != null ?
-                    gameService.getPlayers().stream()
-                            .map(p -> {
-                                Map<String, Object> pMap = new HashMap<>(Map.of("name", p.getName(), "chips", p.getChips(), "bet", gameService.getPlayersBets().getOrDefault(p, 0), "folded", p.isFolded()));
-                                return pMap;
-                            }).toList() : List.of();
+
+            // community cards -> JSON-friendly list
+            List<Map<String, String>> communityJson = new ArrayList<>();
+            List<Card> community = gameService.getCommunityCards();
+            if (community != null) {
+                for (Card c : community) {
+                    communityJson.add(Map.of("suit", c.getSuit().getShortName(), "rank", c.getRank().getShortName()));
+                }
+            }
+            state.put("communityCards", communityJson);
+
+            // players - создаём изменяемый список карт
+            List<Map<String, Object>> playersList = new ArrayList<>();
+            if (gameService.getPlayers() != null) {
+                for (Player p : gameService.getPlayers()) {
+                    Map<String, Object> pMap = new HashMap<>();
+                    pMap.put("name", p.getName());
+                    pMap.put("chips", p.getChips());
+                    pMap.put("bet", gameService.getPlayersBets().getOrDefault(p, 0));
+                    pMap.put("folded", p.isFolded());
+                    // не добавляем hand/ combo сейчас — сделаем это ниже, если раунд закончился
+                    playersList.add(pMap);
+                }
+            }
             state.put("players", playersList);
-            state.put("hand", gameService.getHumanPlayer() != null && gameService.getHumanPlayer().getHand() != null ?
-                    gameService.getHumanPlayer().getHand().stream()
-                            .map(c -> Map.of("suit", c.getSuit().getShortName(), "rank", c.getRank().getShortName()))
-                            .toList() : List.of());
-            state.put("yourTurn", gameService.getCurrentPlayer() != null && gameService.getCurrentPlayer() instanceof HumanPlayer && !gameService.isBettingComplete());
+
+            // твоя рука
+            List<Map<String, String>> myHandJson = new ArrayList<>();
+            if (gameService.getHumanPlayer() != null && gameService.getHumanPlayer().getHand() != null) {
+                for (Card c : gameService.getHumanPlayer().getHand()) {
+                    myHandJson.add(Map.of("suit", c.getSuit().getShortName(), "rank", c.getRank().getShortName()));
+                }
+            }
+            state.put("hand", myHandJson);
+
+            // баланс игрока
+            state.put("yourChips", gameService.getHumanPlayer() != null ? gameService.getHumanPlayer().getChips() : 0);
+
+            // твой ход?
+            state.put("yourTurn", gameService.getCurrentPlayer() != null
+                    && gameService.getCurrentPlayer() instanceof HumanPlayer
+                    && !gameService.isBettingComplete());
+
             state.put("message", gameService.getMessage() != null ? gameService.getMessage() : "");
-            state.put("roundEnded", gameService.checkRoundCompletion());
-            state.put("winners", gameService.checkRoundCompletion() && gameService.getWinners() != null ?
-                    gameService.getWinners().stream().map(Player::getName).toList() : List.of());
+
+            boolean roundEnded = gameService.checkRoundCompletion();
+            state.put("roundEnded", roundEnded);
+
+            // winners names (если есть)
+            List<String> winnerNames = new ArrayList<>();
+            if (roundEnded && gameService.getWinners() != null) {
+                for (Player w : gameService.getWinners()) {
+                    winnerNames.add(w.getName());
+                }
+            }
+            state.put("winners", winnerNames);
+
             state.put("currentBet", gameService.getCurrentBet());
             int humanBet = gameService.getPlayersBets().getOrDefault(gameService.getHumanPlayer(), 0);
             state.put("toCall", gameService.getCurrentBet() - humanBet);
             state.put("success", true);
 
-            if ((boolean) state.get("roundEnded")) {
-                List<Map<String, Object>> updatedPlayers = (List<Map<String, Object>>) state.get("players");
-                List<Card> community = gameService.getCommunityCards();
-                for (Map<String, Object> pMap : updatedPlayers) {
+            // Если раунд завершён — дополняем игроков их картами и комбинацией
+            if (roundEnded) {
+                // Обход именно playersList (тот же объект, что в state)
+                for (Map<String, Object> pMap : playersList) {
                     String name = (String) pMap.get("name");
-                    Player p = gameService.getPlayers().stream().filter(pp -> pp.getName().equals(name)).findFirst().orElse(null);
-                    if (p != null && p.getHand() != null && !p.isFolded()) {
-                        List<Card> allCards = new ArrayList<>(p.getHand());
-                        allCards.addAll(community);
-                        int power = EvaluationCombination.getHandPower(allCards);
-                        Combination combo = EvaluationCombination.getCombinationFromPower(power);
-                        pMap.put("hand", p.getHand().stream().map(c -> Map.of("suit", c.getSuit().getShortName(), "rank", c.getRank().getShortName())).toList());
-                        pMap.put("combo", combo.getName());
+                    // Находим соответствующий Player по имени
+                    Player realPlayer = null;
+                    if (gameService.getPlayers() != null) {
+                        for (Player pp : gameService.getPlayers()) {
+                            if (pp.getName().equals(name)) {
+                                realPlayer = pp;
+                                break;
+                            }
+                        }
                     }
+
+                    if (realPlayer == null) continue;
+
+                    // Добавляем hand (даже если игрок фолднул — можно не показывать, но здесь показываем только если не фолд)
+                    if (realPlayer.getHand() != null && !realPlayer.isFolded()) {
+                        List<Map<String, String>> handJson = new ArrayList<>();
+                        for (Card c : realPlayer.getHand()) {
+                            handJson.add(Map.of("suit", c.getSuit().getShortName(), "rank", c.getRank().getShortName()));
+                        }
+                        pMap.put("hand", handJson);
+
+                        // Составляем allCards = hand + community и считаем комбинацию, только если >=5 карт
+                        List<Card> allCards = new ArrayList<>(realPlayer.getHand());
+                        if (community != null) allCards.addAll(community);
+
+                        if (allCards.size() >= 5) {
+                            try {
+                                int power = EvaluationCombination.getHandPower(allCards);
+                                Combination combo = EvaluationCombination.getCombinationFromPower(power);
+                                pMap.put("combo", combo.getName());
+                            } catch (Exception ex) {
+                                // Если вдруг EvaluationCombination кидает исключение — не ломаем JSON, просто не ставим combo
+                                pMap.put("combo", "");
+                            }
+                        } else {
+                            pMap.put("combo", ""); // недостаточно карт для полной оценки
+                        }
+                    }
+
+                    // Помечаем победителя (если есть)
+                    boolean isWinner = false;
+                    for (String wn : winnerNames) {
+                        if (wn.equals(name)) { isWinner = true; break; }
+                    }
+                    pMap.put("winner", isWinner);
                 }
+                // state уже содержит playersList (мы модифицировали его), поэтому ничего дополнительно put делать не нужно
             }
 
             return ResponseEntity.ok(state);
@@ -116,6 +193,7 @@ public class GameController {
             return ResponseEntity.status(500).body(Map.of("success", false, "error", errorMessage));
         }
     }
+
 
     @PostMapping("/api/action")
     public ResponseEntity<Map<String, Object>> action(@RequestBody Map<String, String> payload) {
