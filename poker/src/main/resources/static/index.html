@@ -93,6 +93,11 @@
       gap: 10px;
       justify-content: center;
     }
+
+    .error-message {
+      color: #ff4d4d;
+      margin-top: 10px;
+    }
   </style>
 </head>
 <body>
@@ -121,6 +126,7 @@
       <input type="number" id="smallBlind" value="10" min="1" placeholder="Малый блайнд">
       <input type="number" id="bigBlind" value="20" min="2" placeholder="Большой блайнд">
     </div>
+    <p class="error-message" id="blindsError"></p>
   </div>
 
   <div class="menu-section">
@@ -130,6 +136,7 @@
       <button onclick="addBot('ai')">+ AI Bot</button>
     </div>
     <div class="players-list" id="playersList"></div>
+    <p class="error-message" id="playersError"></p>
   </div>
 
   <button id="startBtn">Начать игру</button>
@@ -171,6 +178,22 @@
     const bigBlind = parseInt(document.getElementById('bigBlind').value);
     const players = [{ type: 'human', name: 'You' }, ...bots];
 
+    // Валидация блайндов
+    if (smallBlind >= bigBlind) {
+      document.getElementById('blindsError').textContent = 'Малый блайнд должен быть меньше большого блайнда';
+      return;
+    } else {
+      document.getElementById('blindsError').textContent = '';
+    }
+
+    // Валидация количества игроков
+    if (players.length < 2) {
+      document.getElementById('playersError').textContent = 'Добавьте хотя бы одного бота';
+      return;
+    } else {
+      document.getElementById('playersError').textContent = '';
+    }
+
     fetch('/api/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -178,7 +201,7 @@
     }).then(res => res.json())
       .then(data => {
         if (data.success) {
-          window.location.href = '/game';
+          window.location.href = '/game.html';
         } else {
           alert('Ошибка: ' + data.error);
         }

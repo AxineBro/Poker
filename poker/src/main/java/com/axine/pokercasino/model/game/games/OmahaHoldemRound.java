@@ -2,9 +2,11 @@ package com.axine.pokercasino.model.game.games;
 
 import com.axine.pokercasino.model.deck.Card;
 import com.axine.pokercasino.model.deck.Deck;
+import com.axine.pokercasino.model.game.Combination;
 import com.axine.pokercasino.model.game.EvaluationCombination;
 import com.axine.pokercasino.model.game.Round;
 import com.axine.pokercasino.model.game.Stage;
+import com.axine.pokercasino.model.player.Event;
 import com.axine.pokercasino.model.player.Player;
 import com.axine.pokercasino.model.player.PlayerAction;
 import com.axine.pokercasino.model.player.players.HumanPlayer;
@@ -96,9 +98,15 @@ public class OmahaHoldemRound implements Round {
         deck.getCard(); // Burn one card
         int numCards;
         switch (stage) {
-            case FLOP -> numCards = 3;
-            case TURN, RIVER -> numCards = 1;
-            default -> throw new IllegalArgumentException("Invalid stage for dealing community cards");
+            case FLOP:
+                numCards = 3;
+                break;
+            case TURN:
+            case RIVER:
+                numCards = 1;
+                break;
+            default:
+                throw new IllegalArgumentException("Invalid stage for dealing community cards");
         }
         if (deck.getCardsCount() < numCards) {
             throw new IllegalStateException("Not enough cards in deck for community cards");
@@ -155,8 +163,10 @@ public class OmahaHoldemRound implements Round {
         int toPay;
 
         switch (playerAction.getEvent()) {
-            case FOLD -> player.setFolded(true);
-            case CHECK -> {
+            case FOLD:
+                player.setFolded(true);
+                break;
+            case CHECK:
                 toPay = currentBet - alreadyBet;
                 if (toPay > balance) {
                     toPay = balance; // All-in
@@ -165,8 +175,8 @@ public class OmahaHoldemRound implements Round {
                 player.setChips(-toPay);
                 playersBet.put(player, alreadyBet + toPay);
                 actedThisRound.add(player);
-            }
-            case BET -> {
+                break;
+            case BET:
                 int proposedTotal = playerAction.getAmount();
                 if (proposedTotal <= currentBet) throw new IllegalArgumentException("Bet must be higher than current bet");
                 toPay = proposedTotal - alreadyBet;
@@ -180,8 +190,9 @@ public class OmahaHoldemRound implements Round {
                 currentBet = proposedTotal;
                 actedThisRound.clear();
                 actedThisRound.add(player);
-            }
-            default -> throw new IllegalArgumentException("Invalid action: " + playerAction.getEvent());
+                break;
+            default:
+                throw new IllegalArgumentException("Invalid action: " + playerAction.getEvent());
         }
     }
 
@@ -196,11 +207,19 @@ public class OmahaHoldemRound implements Round {
         playersBet.clear();
         actedThisRound.clear();
         switch (stage) {
-            case PREFLOP -> stage = Stage.FLOP;
-            case FLOP -> stage = Stage.TURN;
-            case TURN -> stage = Stage.RIVER;
-            case RIVER -> stage = Stage.SHOWDOWN;
-            default -> {}
+            case PREFLOP:
+                stage = Stage.FLOP;
+                break;
+            case FLOP:
+                stage = Stage.TURN;
+                break;
+            case TURN:
+                stage = Stage.RIVER;
+                break;
+            case RIVER:
+                stage = Stage.SHOWDOWN;
+                break;
+            default:
         }
         if (stage != Stage.SHOWDOWN) {
             currentPlayerIndex = (dealerPos + 1) % players.size();
@@ -238,16 +257,19 @@ public class OmahaHoldemRound implements Round {
                 continue;
             }
 
-            // Omaha правило: ровно 2 карты из руки + ровно 3 с доски
-            int bestComboValue = -1;
             List<List<Card>> holeCombinations = generateCombinations(player.getHand(), 2);
-            List<List<Card>> communityCombinations = generateCombinations(desk, 3);
+            int bestComboValue = -1;
 
             for (List<Card> hole : holeCombinations) {
+                List<List<Card>> communityCombinations = generateCombinations(desk, 3);
                 for (List<Card> community : communityCombinations) {
-                    List<Card> combo = new ArrayList<>(hole);
-                    combo.addAll(community);
-                    int value = EvaluationCombination.getHandPower(combo);
+                    List<Card> hand = new ArrayList<>();
+                    hand.addAll(hole);
+                    hand.addAll(community);
+                    if (hand.size() != 5) {
+                        continue;
+                    }
+                    int value = EvaluationCombination.getHandPower(hand);
                     bestComboValue = Math.max(bestComboValue, value);
                 }
             }
@@ -343,7 +365,7 @@ public class OmahaHoldemRound implements Round {
         do {
             Player p = players.get(index);
             if (!p.isFolded()) {
-                currentPlayerIndex = index;
+                currentPlayerIndex = index; // Update to this
                 return p;
             }
             index = (index + 1) % players.size();

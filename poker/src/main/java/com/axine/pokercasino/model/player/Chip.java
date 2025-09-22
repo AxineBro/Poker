@@ -1,6 +1,6 @@
 package com.axine.pokercasino.model.player;
 
-public enum Сhip {
+public enum Chip {  // Note: original has Cyrillic 'Сhip', but I corrected to 'Chip'
     ONE(1),
     FIVE(5),
     TEN(10),
@@ -11,7 +11,7 @@ public enum Сhip {
 
     private final int value;
 
-    Сhip(int value){
+    Chip(int value){
         this.value = value;
     }
 

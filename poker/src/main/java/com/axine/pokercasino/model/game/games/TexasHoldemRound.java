@@ -2,9 +2,11 @@ package com.axine.pokercasino.model.game.games;
 
 import com.axine.pokercasino.model.deck.Card;
 import com.axine.pokercasino.model.deck.Deck;
+import com.axine.pokercasino.model.game.Combination;
 import com.axine.pokercasino.model.game.EvaluationCombination;
 import com.axine.pokercasino.model.game.Round;
 import com.axine.pokercasino.model.game.Stage;
+import com.axine.pokercasino.model.player.Event;
 import com.axine.pokercasino.model.player.Player;
 import com.axine.pokercasino.model.player.PlayerAction;
 import com.axine.pokercasino.model.player.players.HumanPlayer;
@@ -96,9 +98,15 @@ public class TexasHoldemRound implements Round {
         deck.getCard(); // Burn one card
         int numCards;
         switch (stage) {
-            case FLOP -> numCards = 3;
-            case TURN, RIVER -> numCards = 1;
-            default -> throw new IllegalArgumentException("Invalid stage for dealing community cards");
+            case FLOP:
+                numCards = 3;
+                break;
+            case TURN:
+            case RIVER:
+                numCards = 1;
+                break;
+            default:
+                throw new IllegalArgumentException("Invalid stage for dealing community cards");
         }
         if (deck.getCardsCount() < numCards) {
             throw new IllegalStateException("Not enough cards in deck for community cards");
@@ -155,8 +163,10 @@ public class TexasHoldemRound implements Round {
         int toPay;
 
         switch (playerAction.getEvent()) {
-            case FOLD -> player.setFolded(true);
-            case CHECK -> {
+            case FOLD:
+                player.setFolded(true);
+                break;
+            case CHECK:
                 toPay = currentBet - alreadyBet;
                 if (toPay > balance) {
                     toPay = balance; // All-in
@@ -165,8 +175,8 @@ public class TexasHoldemRound implements Round {
                 player.setChips(-toPay);
                 playersBet.put(player, alreadyBet + toPay);
                 actedThisRound.add(player);
-            }
-            case BET -> {
+                break;
+            case BET:
                 int proposedTotal = playerAction.getAmount();
                 if (proposedTotal <= currentBet) throw new IllegalArgumentException("Bet must be higher than current bet");
                 toPay = proposedTotal - alreadyBet;
@@ -180,8 +190,9 @@ public class TexasHoldemRound implements Round {
                 currentBet = proposedTotal;
                 actedThisRound.clear();
                 actedThisRound.add(player);
-            }
-            default -> throw new IllegalArgumentException("Invalid action: " + playerAction.getEvent());
+                break;
+            default:
+                throw new IllegalArgumentException("Invalid action: " + playerAction.getEvent());
         }
     }
 
@@ -196,11 +207,19 @@ public class TexasHoldemRound implements Round {
         playersBet.clear();
         actedThisRound.clear();
         switch (stage) {
-            case PREFLOP -> stage = Stage.FLOP;
-            case FLOP -> stage = Stage.TURN;
-            case TURN -> stage = Stage.RIVER;
-            case RIVER -> stage = Stage.SHOWDOWN;
-            default -> {}
+            case PREFLOP:
+                stage = Stage.FLOP;
+                break;
+            case FLOP:
+                stage = Stage.TURN;
+                break;
+            case TURN:
+                stage = Stage.RIVER;
+                break;
+            case RIVER:
+                stage = Stage.SHOWDOWN;
+                break;
+            default:
         }
         if (stage != Stage.SHOWDOWN) {
             currentPlayerIndex = (dealerPos + 1) % players.size();
@@ -232,44 +251,20 @@ public class TexasHoldemRound implements Round {
     private List<Player> determineWinners(List<Player> active) {
         List<Player> winners = new ArrayList<>();
         int maxValue = -1;
-
         for (Player p : active) {
             if (p.getHand() == null || p.getHand().isEmpty()) continue;
             List<Card> allCards = new ArrayList<>(p.getHand());
             allCards.addAll(desk);
-
-            int bestValue = -1;
-            for (List<Card> combo : generateCombinations(allCards, 5)) {
-                bestValue = Math.max(bestValue, EvaluationCombination.getHandPower(combo));
-            }
-
-            if (bestValue > maxValue) {
-                maxValue = bestValue;
+            int value = EvaluationCombination.getHandPower(allCards);
+            if (value > maxValue) {
+                maxValue = value;
                 winners.clear();
                 winners.add(p);
-            } else if (bestValue == maxValue) {
+            } else if (value == maxValue) {
                 winners.add(p);
             }
         }
         return winners;
-    }
-
-    private List<List<Card>> generateCombinations(List<Card> cards, int k) {
-        List<List<Card>> result = new ArrayList<>();
-        generateCombinationsHelper(cards, k, 0, new ArrayList<>(), result);
-        return result;
-    }
-
-    private void generateCombinationsHelper(List<Card> cards, int k, int start, List<Card> current, List<List<Card>> result) {
-        if (current.size() == k) {
-            result.add(new ArrayList<>(current));
-            return;
-        }
-        for (int i = start; i < cards.size(); i++) {
-            current.add(cards.get(i));
-            generateCombinationsHelper(cards, k, i + 1, current, result);
-            current.remove(current.size() - 1);
-        }
     }
 
     @Override

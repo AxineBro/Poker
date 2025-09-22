@@ -67,18 +67,10 @@ public class EvaluationCombination {
     }
 
     public static Combination getCombinationFromPower(int power) {
-        if (power >= 9000000) return Combination.ROYALFLUSH;
-        if (power >= 8000000) return Combination.STRAIGHTFLUSH;
-        if (power >= 7000000) return Combination.QUADS;
-        if (power >= 6000000) return Combination.FULLHOUSE;
-        if (power >= 5000000) return Combination.FLUSH;
-        if (power >= 4000000) return Combination.STRAIGHT;
-        if (power >= 3000000) return Combination.SET;
-        if (power >= 2000000) return Combination.TWOPAIRS;
-        if (power >= 1000000) return Combination.ONEPAIR;
-        return Combination.HIGHCARD;
+        int type = power / 1000000;
+        if (type < 0 || type >= Combination.values().length) return Combination.HIGHCARD;
+        return Combination.values()[type];
     }
-
 
     private static Map<Suit, List<Card>> groupBySuit(List<Card> cards) {
         Map<Suit, List<Card>> map = new HashMap<>();

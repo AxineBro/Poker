@@ -77,7 +77,9 @@ function loadGameState() {
                 document.getElementById('raise-amount').value = '';
             } else {
                 document.getElementById('actions').style.display = 'none';
-                setTimeout(loadGameState, 1500); // Увеличено для плавности
+                if (!data.roundEnded) {  // Stop refresh if round ended
+                    setTimeout(loadGameState, 1500);
+                }
             }
 
             if (data.roundEnded) {
@@ -210,8 +212,9 @@ function showWinnerModal(winners, players) {
     if (modal && winnersText && showdownDetails) {
         winnersText.textContent = Array.isArray(winners) && winners.length > 0 ? 'Победители: ' + winners.join(', ') : 'Нет победителей';
         showdownDetails.innerHTML = '';
+        // Show only winners' combos
         players.forEach(p => {
-            if (p.combo && !p.folded) {
+            if (p.combo && !p.folded && winners.includes(p.name)) {
                 const detail = document.createElement('p');
                 detail.textContent = `${p.name}: ${p.combo}`;
                 showdownDetails.appendChild(detail);

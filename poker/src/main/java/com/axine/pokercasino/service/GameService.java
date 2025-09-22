@@ -80,7 +80,7 @@ public class GameService {
             round.setDealerPos(globalDealerPos);
 
             roundFactory.startRound(round);
-            roundFactory.distributeCards(round); // ✅ раздаём только при старте игры
+            roundFactory.distributeCards(round);
             gameStarted = true;
             roundEnded = false;
             message = "Игра началась! Тип: " + gameType + ", Колода: " + deckType + ", Блайнды: " + smallBlind + "/" + bigBlind;
@@ -140,10 +140,7 @@ public class GameService {
             round = roundFactory.createRound(players, deck, smallBlind, bigBlind);
             round.setDealerPos(globalDealerPos);
             roundFactory.startRound(round);
-
-            // ❌ УБРАНО: roundFactory.distributeCards(round);
-            // ✅ Теперь карты не раздаются повторно, чтобы не было одинаковых рук
-
+            roundFactory.distributeCards(round);
             roundEnded = false;
             message = "Новый раунд начался.";
             advanceGame(null);
